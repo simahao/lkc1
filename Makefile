@@ -1,16 +1,17 @@
-platform	:= k210
-#platform	:= qemu
-# mode := debug
+#platform	:= k210
+platform	:= qemu
+#mode := debug
 mode := release
 K=kernel
 U=xv6-user
 T=target
+C=tests
 
 OBJS =
 ifeq ($(platform), k210)
-OBJS += $K/entry_k210.o
+	OBJS += $K/entry_k210.o
 else
-OBJS += $K/entry_qemu.o
+	OBJS += $K/entry_qemu.o
 endif
 
 OBJS += \
@@ -60,9 +61,9 @@ endif
 QEMU = qemu-system-riscv64
 
 ifeq ($(platform), k210)
-RUSTSBI = ./bootloader/SBI/sbi-k210
+	RUSTSBI = ./bootloader/SBI/sbi-k210
 else
-RUSTSBI = ./bootloader/SBI/sbi-qemu
+	RUSTSBI = ./bootloader/SBI/sbi-qemu
 endif
 
 # TOOLPREFIX	:= riscv64-unknown-elf-
@@ -80,22 +81,18 @@ CFLAGS += -ffreestanding -fno-common -nostdlib -mno-relax
 CFLAGS += -I.
 CFLAGS += $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
 
-ifeq ($(mode), debug) 
-CFLAGS += -DDEBUG 
-endif 
-
-ifeq ($(platform), qemu)
-CFLAGS += -D QEMU
+ifeq ($(mode), debug)
+	CFLAGS += -DDEBUG
 endif
-
+ifeq ($(platform), qemu)
+	CFLAGS += -D QEMU
+endif
 LDFLAGS = -z max-page-size=4096
-
 ifeq ($(platform), k210)
-linker = ./linker/k210.ld
+	linker = ./linker/k210.ld
 endif
-
 ifeq ($(platform), qemu)
-linker = ./linker/qemu.ld
+	linker = ./linker/qemu.ld
 endif
 
 # Compile Kernel
@@ -104,40 +101,42 @@ $T/kernel: $(OBJS) $(linker) $U/initcode
 	@$(LD) $(LDFLAGS) -T $(linker) -o $T/kernel $(OBJS)
 	@$(OBJDUMP) -S $T/kernel > $T/kernel.asm
 	@$(OBJDUMP) -t $T/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $T/kernel.sym
-  
+	@mv $T/kernel $T/kernel-qemu
+
 build: $T/kernel userprogs
 
 # Compile RustSBI
-RUSTSBI:
-ifeq ($(platform), k210)
-	@cd ./bootloader/SBI/rustsbi-k210 && cargo build && cp ./target/riscv64gc-unknown-none-elf/debug/rustsbi-k210 ../sbi-k210
-	@$(OBJDUMP) -S ./bootloader/SBI/sbi-k210 > $T/rustsbi-k210.asm
-else
-	@cd ./bootloader/SBI/rustsbi-qemu && cargo build && cp ./target/riscv64gc-unknown-none-elf/debug/rustsbi-qemu ../sbi-qemu
-	@$(OBJDUMP) -S ./bootloader/SBI/sbi-qemu > $T/rustsbi-qemu.asm
-endif
+# RUSTSBI:
+# ifeq ($(platform), k210)
+# 	@cd ./bootloader/SBI/rustsbi-k210 && cargo build && cp ./target/riscv64gc-unknown-none-elf/debug/rustsbi-k210 ../sbi-k210
+# 	@$(OBJDUMP) -S ./bootloader/SBI/sbi-k210 > $T/rustsbi-k210.asm
+# else
+# 	@cd ./bootloader/SBI/rustsbi-qemu && cargo build && cp ./target/riscv64gc-unknown-none-elf/debug/rustsbi-qemu ../sbi-qemu
+# 	@$(OBJDUMP) -S ./bootloader/SBI/sbi-qemu > $T/rustsbi-qemu.asm
+# endif
 
-rustsbi-clean:
-	@cd ./bootloader/SBI/rustsbi-k210 && cargo clean
-	@cd ./bootloader/SBI/rustsbi-qemu && cargo clean
+# rustsbi-clean:
+# 	@cd ./bootloader/SBI/rustsbi-k210 && cargo clean
+# 	@cd ./bootloader/SBI/rustsbi-qemu && cargo clean
 
 image = $T/kernel.bin
 k210 = $T/k210.bin
 k210-serialport := /dev/ttyUSB0
 
 ifndef CPUS
-CPUS := 2
+	CPUS := 2
 endif
 
-QEMUOPTS = -machine virt -kernel $T/kernel -m 8M -nographic
+QEMUOPTS = -machine virt -kernel $T/kernel-qemu -m 128M -nographic
 
-# use multi-core 
+# use multi-core
 QEMUOPTS += -smp $(CPUS)
 
-QEMUOPTS += -bios $(RUSTSBI)
+#QEMUOPTS += -bios $(RUSTSBI)
+QEMUOPTS += -bios default
 
 # import virtual disk image
-QEMUOPTS += -drive file=fs.img,if=none,format=raw,id=x0 
+QEMUOPTS += -drive file=sdcard.img,if=none,format=raw,id=x0
 QEMUOPTS += -device virtio-blk-device,drive=x0,bus=virtio-mmio-bus.0
 
 run: build
@@ -146,7 +145,7 @@ ifeq ($(platform), k210)
 	@$(OBJCOPY) $(RUSTSBI) --strip-all -O binary $(k210)
 	@dd if=$(image) of=$(k210) bs=128k seek=1
 	@$(OBJDUMP) -D -b binary -m riscv $(k210) > $T/k210.asm
-	@sudo chmod 777 $(k210-serialport)
+	@chmod 777 $(k210-serialport)
 	@python3 ./tools/kflash.py -p $(k210-serialport) -b 1500000 -t $(k210)
 else
 	@$(QEMU) $(QEMUOPTS)
@@ -215,37 +214,48 @@ userprogs: $(UPROGS)
 
 dst=/mnt
 
-# @sudo cp $U/_init $(dst)/init
-# @sudo cp $U/_sh $(dst)/sh
 # Make fs image
 fs: $(UPROGS)
-	@if [ ! -f "fs.img" ]; then \
+	@if [ ! -f "sdcard.img" ]; then \
 		echo "making fs image..."; \
-		dd if=/dev/zero of=fs.img bs=512k count=512; \
-		mkfs.vfat -F 32 fs.img; fi
-	@sudo mount fs.img $(dst)
-	@if [ ! -d "$(dst)/bin" ]; then sudo mkdir $(dst)/bin; fi
-	@sudo cp README $(dst)/README
+		dd if=/dev/zero of=sdcard.img bs=1M count=128; \
+		mkfs.vfat -F 32 sdcard.img; fi
+	@mount sdcard.img $(dst)
+	@if [ ! -d "$(dst)/bin" ]; then mkdir $(dst)/bin; fi
 	@for file in $$( ls $U/_* ); do \
-		sudo cp $$file $(dst)/$${file#$U/_};\
-		sudo cp $$file $(dst)/bin/$${file#$U/_}; done
-	@sudo umount $(dst)
+		cp $$file $(dst)/$${file#$U/_}; done
+	@cp -R tests/* $(dst)
+	@umount $(dst)
 
 # Write mounted sdcard
 sdcard: userprogs
-	@if [ ! -d "$(dst)/bin" ]; then sudo mkdir $(dst)/bin; fi
+	@if [ ! -d "$(dst)/bin" ]; then mkdir $(dst)/bin; fi
 	@for file in $$( ls $U/_* ); do \
-		sudo cp $$file $(dst)/bin/$${file#$U/_}; done
-	@sudo cp $U/_init $(dst)/init
-	@sudo cp $U/_sh $(dst)/sh
-	@sudo cp README $(dst)/README
+		cp $$file $(dst)/bin/$${file#$U/_}; done
+	@cp $U/_init $(dst)/init
+	@cp $U/_sh $(dst)/sh
+	@cp README $(dst)/README
 
-clean: 
-	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
+clean:
+	rm -f kernel-qemu *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
 	*/*.o */*.d */*.asm */*.sym \
 	$T/* \
 	$U/initcode $U/initcode.out \
 	$K/kernel \
 	.gdbinit \
 	$U/usys.S \
-	$(UPROGS)
+	sdcard.img \
+	#$(UPROGS)
+test:
+#build: kernel userprog
+	@make build platform=qemu
+	@make fs
+	@$(QEMU) $(QEMUOPTS)
+
+all:
+	make build platform=qemu
+#	cp $T/kernel kernel-qemu
+
+geninit: $U/initcode
+	@cp $U/initcode initcode
+	@od -t x1 -An -w4096 initcode > initcode.txt
