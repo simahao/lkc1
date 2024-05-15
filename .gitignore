@@ -1,52 +1,17 @@
-# Prerequisites
-*.d
-
-# Object files
-*.o
-*.ko
-*.obj
-*.elf
-
-# Linker output
-*.ilk
-*.map
-*.exp
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
-
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
-
-# Executables
-*.exe
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
-
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
-
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
-Module.symvers
-Mkfile.old
-dkms.conf
+tags
+fs.img
+xv6-user/_*
+xv6-user/*.d
+xv6-user/*.o
+xv6-user/*.asm
+xv6-user/*.sym
+xv6-user/initcode
+xv6-user/initcode.out
+xv6-user/usys.S
+kernel/*.back.c
+kernel/*.example.c
+kernel/*.d
+kernel/*.o
+kernel/include/*.back.h
+kernel/include/*.example.h
+target/*
