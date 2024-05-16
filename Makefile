@@ -101,7 +101,7 @@ $T/kernel: $(OBJS) $(linker)
 	@$(LD) $(LDFLAGS) -T $(linker) -o $T/kernel $(OBJS)
 	@$(OBJDUMP) -S $T/kernel > $T/kernel.asm
 	@$(OBJDUMP) -t $T/kernel | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $T/kernel.sym
-	@mv $T/kernel $T/kernel-qemu
+	@mv $T/kernel kernel-qemu
 
 build: $T/kernel userprogs
 
@@ -127,7 +127,7 @@ ifndef CPUS
 	CPUS := 2
 endif
 
-QEMUOPTS = -machine virt -kernel $T/kernel-qemu -m 128M -nographic
+QEMUOPTS = -machine virt -kernel kernel-qemu -m 128M -nographic
 
 # use multi-core
 QEMUOPTS += -smp $(CPUS)
