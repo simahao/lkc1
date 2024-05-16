@@ -276,7 +276,7 @@ userinit(void)
   p->trapframe->epc = 0x0;      // user program counter
   p->trapframe->sp = PGSIZE;  // user stack pointer
 
-  safestrcpy(p->name, "initcode", sizeof(p->name));
+  safestrcpy(p->name, "init", sizeof(p->name));
 
   p->state = RUNNABLE;
 
@@ -774,3 +774,111 @@ procnum(void)
   return num;
 }
 
+//add for syscall
+int
+clone(int stack)
+{
+  int i, pid;
+  struct proc *np;
+  struct proc *p = myproc();
+
+  if(stack < 0 || stack > p->sz)
+    return -1;
+
+  // Allocate process.
+  if((np = allocproc()) == NULL){
+    return -1;
+  }
+
+  // Copy user memory from parent to child.
+  if(uvmcopy(p->pagetable, np->pagetable, np->kpagetable, p->sz) < 0){
+    freeproc(np);
+    release(&np->lock);
+    return -1;
+  }
+  np->sz = p->sz;
+
+  np->parent = p;
+
+  // copy tracing mask from parent.
+  np->tmask = p->tmask;
+
+  // copy saved user registers.
+  *(np->trapframe) = *(p->trapframe);
+
+  // Cause fork to return 0 in the child.
+  np->trapframe->a0 = 0;
+
+  if(stack > 0)
+    np->trapframe->sp=stack;
+
+  // increment reference counts on open file descriptors.
+  for(i = 0; i < NOFILE; i++)
+    if(p->ofile[i])
+      np->ofile[i] = filedup(p->ofile[i]);
+  np->cwd = edup(p->cwd);
+
+  safestrcpy(np->name, p->name, sizeof(p->name));
+
+  pid = np->pid;
+
+  np->state = RUNNABLE;
+
+  release(&np->lock);
+
+  return pid;
+}
+
+int
+wait4(int pid, uint64 addr)
+{
+  if(pid ==-1)
+    return wait(addr);
+  struct proc *np;
+  int havekid;
+  struct proc *p = myproc();
+
+  // hold p->lock for the whole time to avoid lost
+  // wakeups from a child's exit().
+  acquire(&p->lock);
+  for(;;){
+    // Scan through table looking for exited children.
+    havekid = 0;
+    for(np = proc; np < &proc[NPROC]; np++){
+      // this code uses np->parent without holding np->lock.
+      // acquiring the lock first would cause a deadlock,
+      // since np might be an ancestor, and we already hold p->lock.
+      if(np->parent == p && np->pid==pid){
+        // np->parent can't change between the check and the acquire()
+        // because only the parent changes it, and we're the parent.
+        acquire(&np->lock);
+        havekid = 1;
+        if(np->state == ZOMBIE){
+          // Found one.
+          pid = np->pid;
+          if(addr != 0 && copyout2(addr, (char *)&np->xstate, sizeof(np->xstate)) < 0) {
+            release(&np->lock);
+            release(&p->lock);
+            return -1;
+          }
+          freeproc(np);
+          release(&np->lock);
+          release(&p->lock);
+
+
+          return pid;
+        }
+        release(&np->lock);
+      }
+    }
+
+    // No point waiting if we don't have any children.
+    if(!havekid || p->killed){
+      release(&p->lock);
+      return -1;
+    }
+
+    // Wait for a child to exit.
+    sleep(p, &p->lock);  //DOC: wait-sleep
+  }
+}

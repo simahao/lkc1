@@ -73,6 +73,9 @@
 //#define SYS_getcwd      25
 #define SYS_rename      26
 
+//add for syscall
+#define SYS_shutdown    210
+
 
 
 #endif

@@ -10,6 +10,7 @@
 #include "include/kalloc.h"
 #include "include/string.h"
 #include "include/printf.h"
+#include "include/sbi.h"
 
 extern int exec(char *path, char **argv);
 
@@ -76,6 +77,7 @@ sys_fork(void)
 {
   return fork();
 }
+
 
 uint64
 sys_wait(void)
@@ -153,4 +155,70 @@ sys_trace(void)
   }
   myproc()->tmask = mask;
   return 0;
+}
+
+//add for syscall
+uint64
+sys_clone(void)
+{
+  int stack;
+  if(argint(1, &stack) <0)
+    return -1;
+  return clone(stack);
+}
+
+uint64
+sys_brk(void)
+{
+  int n;
+  int addr;
+
+  if(argint(0, &n) < 0)
+    return -1;
+  addr = myproc()->sz;
+  if(n == 0) return addr;
+  if(growproc(n - addr) < 0)
+    return -1;
+  return addr;
+}
+uint64
+sys_wait4(void)
+{
+  int pid;
+  uint64 status;
+  int options;
+  if(argint(0, &pid) < 0 || argaddr(1, &status) < 0 || argint(2, &options) <0)
+    return -1;
+  if(options)
+    printf("Warning: sys_wait4 haven't processed options!\n");
+  return wait4(pid, status);
+}
+uint64
+sys_nanosleep(void)
+{
+  uint64 addr;
+  uint64 r_time0, r_time1, sec, usec;
+
+  if(argaddr(0, &addr) < 0)
+    return -1;
+  if(fetchaddr(addr, &sec) < 0 ||
+    fetchaddr(addr+8, &usec) < 0)
+    return -1;
+  acquire(&tickslock);
+  r_time0 = r_time();
+  r_time1 = r_time0 + R_TIME_TIMES*(sec*1000000 + usec);
+  while(r_time() < r_time1){
+    if(myproc()->killed){
+      release(&tickslock);
+      return -1;
+    }
+    sleep(&ticks, &tickslock);
+  }
+  release(&tickslock);
+  return 0;
+}
+
+uint64 sys_shutdown() {
+    sbi_shutdown();
+    panic("shutdown: can not reach here");
 }

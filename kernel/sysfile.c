@@ -135,7 +135,7 @@ create(char *path, short type, int mode)
   } else if (mode & O_RDONLY) {
     mode = ATTR_READ_ONLY;
   } else {
-    mode = 0;  
+    mode = 0;
   }
 
   elock(dp);
@@ -144,7 +144,7 @@ create(char *path, short type, int mode)
     eput(dp);
     return NULL;
   }
-  
+
   if ((type == T_DIR && !(ep->attribute & ATTR_DIRECTORY)) ||
       (type == T_FILE && (ep->attribute & ATTR_DIRECTORY))) {
     eunlock(dp);
@@ -158,6 +158,117 @@ create(char *path, short type, int mode)
 
   elock(ep);
   return ep;
+}
+static int dirent2path(char *path, int maxlen, struct dirent *de) {
+  if (!de)
+    return 0;
+  int ans = 0;
+  ans += dirent2path(path, maxlen, de->parent);
+  maxlen -= ans;
+  strncpy(path + ans, de->filename, (maxlen > 0? maxlen: 0));
+  ans += strlen(de->filename);
+  if(ans < maxlen) path[ans++] = '/';
+  if(ans < maxlen) path[ans] = '\0';
+  return ans;
+}
+uint64
+sys_openat(void)
+{
+  char path[FAT32_MAX_PATH];
+  int fd, omode;
+  struct file *f;
+  struct dirent *ep;
+
+  int dirfd;
+  struct file *dirf;
+
+
+  if(argstr(1, path, FAT32_MAX_PATH) < 0 || argint(2, &omode) < 0)
+    return -1;
+  if (argfd(0, &dirfd, &dirf) >= 0) {
+    if(path[0] != '/') {
+      char tmp[FAT32_MAX_PATH];
+      int length = dirent2path(tmp, FAT32_MAX_PATH, dirf->ep);
+      if (length + strlen(path) >= FAT32_MAX_PATH)
+        return -1;
+      if(path[0] == '.') {
+        if(path[1] == '/')
+          strncpy(tmp + length, path+2, FAT32_MAX_PATH);
+        else if(path[1] != '\0')
+          strncpy(tmp + length, path, FAT32_MAX_PATH);
+      }
+      else
+        strncpy(tmp + length, path, FAT32_MAX_PATH);
+      strncpy(path, tmp, FAT32_MAX_PATH);
+    }
+  }
+  else {
+    if(argint(0, &dirfd) < 0)
+      return -1;
+    if(dirfd == -100 && path[0] != '/') {
+      char tmp[FAT32_MAX_PATH];
+      int length = dirent2path(tmp, FAT32_MAX_PATH, myproc()->cwd);
+      if (length + strlen(path) >= FAT32_MAX_PATH)
+        return -1;
+      if(path[0] == '.') {
+        if(path[1] == '/')
+          strncpy(tmp + length, path+2, FAT32_MAX_PATH);
+        else if(path[1] != '\0')
+          strncpy(tmp + length, path, FAT32_MAX_PATH);
+      }
+      else
+        strncpy(tmp + length, path, FAT32_MAX_PATH);
+      strncpy(path, tmp, FAT32_MAX_PATH);
+    }
+  }
+
+  if(omode & O_CREATE){
+    ep = create(path, T_FILE, omode);
+    if(ep == NULL){
+      return -1;
+    }
+  } else {
+    if((ep = ename(path)) == NULL){
+      return -1;
+    }
+    elock(ep);
+    if((ep->attribute & ATTR_DIRECTORY) && omode != O_RDONLY && omode != O_DIRECTORY){
+      eunlock(ep);
+      eput(ep);
+      return -1;
+    }
+  }
+
+  if((f = filealloc()) == NULL){
+    if (f) {
+      fileclose(f);
+    }
+    eunlock(ep);
+    eput(ep);
+    return -1;
+  }
+
+  if((f = filealloc()) == NULL || (fd = fdalloc(f)) < 0){
+    if (f) {
+      fileclose(f);
+    }
+    eunlock(ep);
+    eput(ep);
+    return -1;
+  }
+
+  if(!(ep->attribute & ATTR_DIRECTORY) && (omode & O_TRUNC)){
+    etrunc(ep);
+  }
+
+  f->type = FD_ENTRY;
+  f->off = (omode & O_APPEND) ? ep->file_size : 0;
+  f->ep = ep;
+  f->readable = !(omode & O_WRONLY);
+  f->writable = (omode & O_WRONLY) || (omode & O_RDWR);
+
+  eunlock(ep);
+  return fd;
 }
 
 uint64
@@ -225,14 +336,67 @@ sys_mkdir(void)
   eput(ep);
   return 0;
 }
+uint64
+sys_mkdirat(void)
+{
+  char path[FAT32_MAX_PATH];
+  struct dirent *ep;
+  int dirfd;
+  struct file* dirf;
 
+  if(argstr(1, path, FAT32_MAX_PATH) < 0){
+    return -1;
+  }
+
+  if (argfd(0, &dirfd, &dirf) >= 0) {
+    if(path[0] != '/') {
+      char tmp[FAT32_MAX_PATH];
+      int length = dirent2path(tmp, FAT32_MAX_PATH, dirf->ep);
+      if (length + strlen(path) >= FAT32_MAX_PATH)
+        return -1;
+      if(path[0] == '.') {
+        if(path[1] == '/')
+          strncpy(tmp + length, path+2, FAT32_MAX_PATH);
+        else if(path[1] != '\0')
+          strncpy(tmp + length, path, FAT32_MAX_PATH);
+      }
+      else
+        strncpy(tmp + length, path, FAT32_MAX_PATH);
+      strncpy(path, tmp, FAT32_MAX_PATH);
+    }
+  }
+  else {
+    if(argint(0, &dirfd) < 0)
+      return -1;
+    if(dirfd == -100 && path[0] != '/') {
+      char tmp[FAT32_MAX_PATH];
+      int length = dirent2path(tmp, FAT32_MAX_PATH, myproc()->cwd);
+      if (length + strlen(path) >= FAT32_MAX_PATH)
+        return -1;
+      if(path[0] == '.') {
+        if(path[1] == '/')
+          strncpy(tmp + length, path+2, FAT32_MAX_PATH);
+        else if(path[1] != '\0')
+          strncpy(tmp + length, path, FAT32_MAX_PATH);
+      }
+      else
+        strncpy(tmp + length, path, FAT32_MAX_PATH);
+      strncpy(path, tmp, FAT32_MAX_PATH);
+    }
+  }
+  if((ep = create(path, T_DIR, 0)) == 0)
+    return -1;
+  eunlock(ep);
+  eput(ep);
+  return 0;
+}
 uint64
 sys_chdir(void)
 {
   char path[FAT32_MAX_PATH];
   struct dirent *ep;
   struct proc *p = myproc();
-  
+
   if(argstr(0, path, FAT32_MAX_PATH) < 0 || (ep = ename(path)) == NULL){
     return -1;
   }
@@ -360,7 +524,7 @@ sys_getcwd(void)
   // if (copyout(myproc()->pagetable, addr, s, strlen(s) + 1) < 0)
   if (copyout2(addr, s, strlen(s) + 1) < 0)
     return -1;
-  
+
   return 0;
 
 }
@@ -393,7 +557,7 @@ sys_remove(void)
   if (s >= path && *s == '.' && (s == path || *--s == '/')) {
     return -1;
   }
-  
+
   if((ep = ename(path)) == NULL){
     return -1;
   }
@@ -493,4 +657,10 @@ fail:
   if (src)
     eput(src);
   return -1;
+}
+
+uint64
+sys_pipe2(void)
+{
+  return sys_pipe();
 }

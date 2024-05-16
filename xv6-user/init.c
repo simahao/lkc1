@@ -4,27 +4,77 @@
 #include "kernel/include/stat.h"
 #include "kernel/include/file.h"
 #include "kernel/include/fcntl.h"
+#include "kernel/include/sysnum.h"
 #include "xv6-user/user.h"
+
+#define __asm_syscall(...)             \
+    __asm__ __volatile__("ecall\n\t"   \
+                         : "=r"(a0)    \
+                         : __VA_ARGS__ \
+                         : "memory");  \
+    return a0;
+
+static inline long __syscall0(long n)
+{
+    register long a7 __asm__("a7") = n;
+    register long a0 __asm__("a0");
+    __asm_syscall("r"(a7))
+}
 
 char *argv[] = {0};
 char *tests[] = {
+    "brk",
     "chdir",
     "close",
     "dup",
     "exit",
     "fork",
     "fstat",
+    "getcwd",
     "getpid",
-    "mkdir",
+    "gettimeofday",
+    "mkdir_",
+    "openat",
     "open",
     "pipe",
     "read",
-    "brk",
-    "sleep",
+    "uname",
     "wait",
     "write",
-    "getcwd",
+    "sleep",
+    "clone",
+
+    // "execve",
+    // "getdents",
+    // "getppid",
+    // "mmap",
+    // "mount",
+    // "munmap",
+    // "yield",
+    // "waitpid",
+    // "dup2",
+    // "times",
+    // "umount",
+    // "unlink",
 };
+// char *tests[] = {
+//     "chdir",
+//     "close",
+//     "dup",
+//     "exit",
+//     "fork",
+//     "fstat",
+//     "getpid",
+//     "mkdir_",
+//     "open",
+//     "pipe",
+//     "read",
+//     "brk",
+//     "sleep",
+//     "wait",
+//     "write",
+//     "getcwd",
+// };
 
 int counts = sizeof(tests) / sizeof((tests)[0]);
 
@@ -64,5 +114,6 @@ int main(void) {
       }
     }
   }
+  __syscall0(SYS_shutdown);
   return 0;
 }

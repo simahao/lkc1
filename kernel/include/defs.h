@@ -240,3 +240,9 @@ void            test_sdcard(void);
 
 // number of elements in fixed-size array
 #define NELEM(x) (sizeof(x)/sizeof((x)[0]))
+
+
+//add for syscall
+int             argint(int, int*);
+int             argstr(int, char*, int);
+int             argaddr(int, uint64 *);

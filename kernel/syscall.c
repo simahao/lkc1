@@ -1,4 +1,3 @@
-
 #include "include/types.h"
 #include "include/param.h"
 #include "include/memlayout.h"
@@ -11,6 +10,7 @@
 #include "include/vm.h"
 #include "include/string.h"
 #include "include/printf.h"
+#include "include/timer.h"
 
 // Fetch the uint64 at addr from the current process.
 int
@@ -116,6 +116,17 @@ extern uint64 sys_remove(void);
 extern uint64 sys_trace(void);
 extern uint64 sys_sysinfo(void);
 extern uint64 sys_rename(void);
+//add for syscall
+extern uint64 sys_openat(void);
+extern uint64 sys_mkdirat(void);
+extern uint64 sys_clone(void);
+extern uint64 sys_wait4(void);
+extern uint64 sys_pipe2(void);
+extern uint64 sys_brk(void);
+extern uint64 sys_gettimeofday(void);
+extern uint64 sys_nanosleep(void);
+extern uint64 sys_shutdown(void);
+extern uint64 sys_uname(void);
 
 static uint64 (*syscalls[])(void) = {
   [SYS_fork]        sys_fork,
@@ -144,6 +155,18 @@ static uint64 (*syscalls[])(void) = {
   [SYS_trace]       sys_trace,
   [SYS_sysinfo]     sys_sysinfo,
   [SYS_rename]      sys_rename,
+
+  //add for syscall
+  [SYS_openat]      sys_openat,
+  [SYS_mkdirat]     sys_mkdirat,
+  [SYS_clone]       sys_clone,
+  [SYS_brk]         sys_brk,
+  [SYS_pipe2]       sys_pipe2,
+  [SYS_wait4]       sys_wait4,
+  [SYS_gettimeofday] sys_gettimeofday,
+  [SYS_nanosleep]   sys_nanosleep,
+  [SYS_uname]           sys_uname,
+  [SYS_shutdown]    sys_shutdown,
 };
 
 static char *sysnames[] = {
@@ -173,6 +196,18 @@ static char *sysnames[] = {
   [SYS_trace]       "trace",
   [SYS_sysinfo]     "sysinfo",
   [SYS_rename]      "rename",
+
+  //add for syscall
+  [SYS_openat]      "openat",
+  [SYS_mkdirat]     "mkdirat",
+  [SYS_clone]       "clone",
+  [SYS_brk]         "brk",
+  [SYS_pipe2]       "pipe2",
+  [SYS_wait4]       "wait4",
+  [SYS_gettimeofday] "gettimeofday",
+  [SYS_nanosleep]   "nanosleep",
+  [SYS_uname]          "uname",
+  [SYS_shutdown]    "shutdown",
 };
 
 void
@@ -195,7 +230,7 @@ syscall(void)
   }
 }
 
-uint64 
+uint64
 sys_test_proc(void) {
     int n;
     argint(0, &n);
@@ -222,5 +257,29 @@ sys_sysinfo(void)
     return -1;
   }
 
+  return 0;
+}
+
+uint64
+sys_uname(void)
+{
+  uint64 addr;
+  if(argaddr(0, &addr) < 0)
+    return -1;
+  struct utsname {
+    char sysname[65];
+    char nodename[65];
+    char release[65];
+    char version[65];
+    char machine[65];
+    char domainname[65];
+  };
+  static struct utsname uname={
+    "CRAY", "localhost",
+    "1.0", "1.0",
+    "riscv64", "localhost"
+  };
+  if(copyout2(addr, (char *) & uname, sizeof(uname)) < 0)
+    return -1;
   return 0;
 }
