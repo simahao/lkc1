@@ -5,7 +5,6 @@ mode := release
 K=kernel
 U=xv6-user
 T=target
-C=tests
 
 OBJS =
 ifeq ($(platform), k210)
@@ -96,7 +95,8 @@ ifeq ($(platform), qemu)
 endif
 
 # Compile Kernel
-$T/kernel: $(OBJS) $(linker) $U/initcode
+# $T/kernel: $(OBJS) $(linker) $U/initcode
+$T/kernel: $(OBJS) $(linker)
 	@if [ ! -d "./target" ]; then mkdir target; fi
 	@$(LD) $(LDFLAGS) -T $(linker) -o $T/kernel $(OBJS)
 	@$(OBJDUMP) -S $T/kernel > $T/kernel.asm
@@ -223,7 +223,7 @@ fs: $(UPROGS)
 	@mount sdcard.img $(dst)
 	@if [ ! -d "$(dst)/bin" ]; then mkdir $(dst)/bin; fi
 	@for file in $$( ls $U/_* ); do \
-		cp $$file $(dst)/$${file#$U/_}; done
+		cp $$file $(dst)/bin/$${file#$U/_}; done
 	@cp -R tests/* $(dst)
 	@umount $(dst)
 
@@ -234,7 +234,7 @@ sdcard: userprogs
 		cp $$file $(dst)/bin/$${file#$U/_}; done
 	@cp $U/_init $(dst)/init
 	@cp $U/_sh $(dst)/sh
-	@cp README $(dst)/README
+#	@cp README $(dst)/README
 
 clean:
 	rm -f kernel-qemu *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \
@@ -246,7 +246,7 @@ clean:
 	$U/usys.S \
 	sdcard.img \
 	#$(UPROGS)
-test:
+local:
 #build: kernel userprog
 	@make build platform=qemu
 	@make fs
@@ -256,6 +256,9 @@ all:
 	make build platform=qemu
 #	cp $T/kernel kernel-qemu
 
-geninit: $U/initcode
-	@cp $U/initcode initcode
-	@od -t x1 -An -w4096 initcode > initcode.txt
+# geninit: $U/initcode
+# 	@cp $U/initcode initcode
+# 	@od -t x1 -An -w4096 initcode > initcode.txt
+
+test: $U/_init
+	@./runtest.sh

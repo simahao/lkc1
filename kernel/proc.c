@@ -52,7 +52,7 @@ void
 procinit(void)
 {
   struct proc *p;
-  
+
   initlock(&pid_lock, "nextpid");
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
@@ -93,7 +93,7 @@ struct cpu*
 mycpu(void) {
   int id = cpuid();
   struct cpu *c = &cpus[id];
-  
+
   return c;
 }
 
@@ -110,7 +110,7 @@ myproc(void) {
 int
 allocpid() {
   int pid;
-  
+
   acquire(&pid_lock);
   pid = nextpid;
   nextpid = nextpid + 1;
@@ -239,46 +239,24 @@ proc_freepagetable(pagetable_t pagetable, uint64 sz)
 // a user program that calls exec("/init")
 // od -t xC initcode
 uchar initcode[] = {
-  0x17, 0x05, 0x00, 0x00, 0x13, 0x05, 0x45, 0x02,
-  0x97, 0x05, 0x00, 0x00, 0x93, 0x85, 0x35, 0x02,
-  0x93, 0x08, 0x70, 0x00, 0x73, 0x00, 0x00, 0x00,
-  0x93, 0x08, 0x20, 0x00, 0x73, 0x00, 0x00, 0x00,
-  0xef, 0xf0, 0x9f, 0xff, 0x2f, 0x69, 0x6e, 0x69,
-  0x74, 0x00, 0x00, 0x24, 0x00, 0x00, 0x00, 0x00,
-  0x00, 0x00, 0x00, 0x00
+#include "include/initcode.h"
 };
 
 // uchar printhello[] = {
 //     0x13, 0x00, 0x00, 0x00,     // nop
-//     0x13, 0x00, 0x00, 0x00,     // nop 
-//     0x13, 0x00, 0x00, 0x00,     // nop 
+//     0x13, 0x00, 0x00, 0x00,     // nop
+//     0x13, 0x00, 0x00, 0x00,     // nop
 //     // <start>
-//     0x17, 0x05, 0x00, 0x00,     // auipc a0, 0x0 
-//     0x13, 0x05, 0x05, 0x00,     // mv a0, a0 
-//     0x93, 0x08, 0x60, 0x01,     // li a7, 22 
-//     0x73, 0x00, 0x00, 0x00,     // ecall 
+//     0x17, 0x05, 0x00, 0x00,     // auipc a0, 0x0
+//     0x13, 0x05, 0x05, 0x00,     // mv a0, a0
+//     0x93, 0x08, 0x60, 0x01,     // li a7, 22
+//     0x73, 0x00, 0x00, 0x00,     // ecall
 //     0xef, 0xf0, 0x1f, 0xff,     // jal ra, <start>
 //     // <loop>
 //     0xef, 0x00, 0x00, 0x00,     // jal ra, <loop>
 // };
 
 
-// void test_proc_init(int proc_num) {
-//   if(proc_num > NPROC) panic("test_proc_init\n");
-//   struct proc *p;
-//   for(int i = 0; i < proc_num; i++) {
-//     p = allocproc();
-//     uvminit(p->pagetable, (uchar*)printhello, sizeof(printhello));
-//     p->sz = PGSIZE;
-//     p->trapframe->epc = 0x0;
-//     p->trapframe->sp = PGSIZE;
-//     safestrcpy(p->name, "test_code", sizeof(p->name));
-//     p->state = RUNNABLE;
-//     release(&p->lock);
-//   }
-//   initproc = proc;
-//   printf("[test_proc]test_proc init done\n");
-// }
 
 // Set up first user process.
 void
@@ -288,7 +266,7 @@ userinit(void)
 
   p = allocproc();
   initproc = p;
-  
+
   // allocate one user page and copy init's instructions
   // and data into it.
   uvminit(p->pagetable , p->kpagetable, initcode, sizeof(initcode));
@@ -447,7 +425,7 @@ exit(int status)
   acquire(&p->lock);
   struct proc *original_parent = p->parent;
   release(&p->lock);
-  
+
   // we need the parent's lock in order to wake it up from wait().
   // the parent-then-child rule says we have to lock it first.
   acquire(&original_parent->lock);
@@ -517,7 +495,7 @@ wait(uint64 addr)
       release(&p->lock);
       return -1;
     }
-    
+
     // Wait for a child to exit.
     sleep(p, &p->lock);  //DOC: wait-sleep
   }
@@ -541,7 +519,7 @@ scheduler(void)
   for(;;){
     // Avoid deadlock by ensuring that devices can interrupt.
     intr_on();
-    
+
     int found = 0;
     for(p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
@@ -640,7 +618,7 @@ void
 sleep(void *chan, struct spinlock *lk)
 {
   struct proc *p = myproc();
-  
+
   // Must acquire p->lock in order to
   // change p->state and then call sched.
   // Once we hold p->lock, we can be
