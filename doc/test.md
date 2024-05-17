@@ -55,7 +55,7 @@ fs: $(UPROGS)
 
 操作系统内核初始化结束后，会进入用户态模式，比如说调用`sh`程序，进入交互式模式。因此我们需要完成两项主要的工作。
 
-1. 生成一个类似于shell的用户程序，我们这里命名为runtest，这个程序主要完成调用sdcard.img中测试用例
+1. 生成一个类似于shell的用户程序(init)，这个程序主要完成调用sdcard.img中测试用例
 
 ```c
 
@@ -141,7 +141,7 @@ int main(void) {
 
 ```
 
-2. 将runtest的十六进形式加载到操作系统内核对应的内存中，并运行。为了提高效率，将runtest生成16进制代码的过程，形成了shell脚本。在makefile中，我们添加了test目标，test目标会调用runtest.sh脚本。
+2. 将init的十六进形式加载到操作系统内核对应的内存中，并运行。为了提高效率，将init生成16进制代码的过程，形成了shell脚本。在makefile中，我们添加了test目标，test目标会调用runtest.sh脚本。
 
 ```shell
 riscv64-linux-gnu-objcopy -S -O binary xv6-user/_init oo
@@ -149,7 +149,7 @@ od -v -t x1 -An oo | sed -E 's/ (.{2})/0x\1,/g' > kernel/include/initcode.h
 rm oo
 ```
 
-其中`riscv64-linux-gnu-objcopy -S -O binary fsimg/runtest oo`是将gcc编译好的runtest程序，通过objcopy命令，保存符号表，并且以二进制的方式生成oo文件。`od -v -t x1 -An oo`命令将二进制文件，生成16进制，生成过程中去除地址，并且不要使用'*'来标注重复的信息。`sed -E 's/ (.{2})/0x\1,/g' > include/initcode.h`命令将每一个十六进制的数据前面添加`0x`前缀，字段间通过逗号间隔，然后将结果输出到`include/initcode.h`文件中。
+其中`riscv64-linux-gnu-objcopy -S -O binary xv6-user/_init oo`是将gcc编译好的_init程序，通过objcopy命令，保存符号表，并且以二进制的方式生成oo文件。`od -v -t x1 -An oo`命令将二进制文件，生成16进制，生成过程中去除地址，并且不要使用'*'来标注重复的信息。`sed -E 's/ (.{2})/0x\1,/g' > kernel/include/initcode.h`命令将每一个十六进制的数据前面添加`0x`前缀，字段间通过逗号间隔，然后将结果输出到`kernel/include/initcode.h`文件中。
 
 initcode.h代码片段如下
 
@@ -170,7 +170,7 @@ initcode.h代码片段如下
 
 ```c
 uchar initcode[] = {
-#include "initcode.h"
+#include "include/initcode.h"
 };
 // Set up first user process.
 void userinit(void) {
